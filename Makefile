@@ -3,18 +3,24 @@ TESTENVVAR =
 REGISTRY ?= gcr.io/k8s-staging-kube-state-metrics
 TAG_PREFIX = v
 VERSION = $(shell cat VERSION)
-TAG = $(TAG_PREFIX)$(VERSION)
+TAG ?= $(TAG_PREFIX)$(VERSION)
 LATEST_RELEASE_BRANCH := release-$(shell grep -ohE "[0-9]+.[0-9]+" VERSION)
+BRANCH = $(strip $(shell git rev-parse --abbrev-ref HEAD))
 DOCKER_CLI ?= docker
+PROMTOOL_CLI ?= promtool
 PKGS = $(shell go list ./... | grep -v /vendor/ | grep -v /tests/e2e)
 ARCH ?= $(shell go env GOARCH)
-BuildDate = $(shell date -u +'%Y-%m-%dT%H:%M:%SZ')
-Commit = $(shell git rev-parse --short HEAD)
+BUILD_DATE = $(shell date -u +'%Y-%m-%dT%H:%M:%SZ')
+GIT_COMMIT ?= $(shell git rev-parse --short HEAD)
+OS ?= $(shell uname -s | tr A-Z a-z)
 ALL_ARCH = amd64 arm arm64 ppc64le s390x
-PKG = k8s.io/kube-state-metrics/pkg
-GO_VERSION = 1.14.7
+PKG = github.com/prometheus/common
+PROMETHEUS_VERSION = 2.28.1
+GO_VERSION = 1.16.5
 IMAGE = $(REGISTRY)/kube-state-metrics
 MULTI_ARCH_IMG = $(IMAGE)-$(ARCH)
+USER ?= $(shell id -u -n)
+HOST ?= $(shell hostname)
 
 export DOCKER_CLI_EXPERIMENTAL=enabled
 
@@ -23,9 +29,7 @@ validate-modules:
 	go mod verify
 	@echo "- Checking for any unused/missing packages in go.mod..."
 	go mod tidy
-	@echo "- Checking for unused packages in vendor..."
-	go mod vendor
-	@git diff --exit-code -- go.sum go.mod vendor/
+	@git diff --exit-code -- go.sum go.mod
 
 licensecheck:
 	@echo ">> checking license header"
@@ -54,15 +58,18 @@ doccheck: generate
 	@echo OK
 
 build-local:
-	GOOS=$(shell uname -s | tr A-Z a-z) GOARCH=$(ARCH) CGO_ENABLED=0 go build -ldflags "-s -w -X ${PKG}/version.Release=${TAG} -X ${PKG}/version.Commit=${Commit} -X ${PKG}/version.BuildDate=${BuildDate}" -o kube-state-metrics
+	GOOS=$(OS) GOARCH=$(ARCH) CGO_ENABLED=0 go build -ldflags "-s -w -X ${PKG}/version.Version=${TAG} -X ${PKG}/version.Revision=${GIT_COMMIT} -X ${PKG}/version.Branch=${BRANCH} -X ${PKG}/version.BuildUser=${USER}@${HOST} -X ${PKG}/version.BuildDate=${BUILD_DATE}" -o kube-state-metrics
 
 build: kube-state-metrics
 
 kube-state-metrics:
 	${DOCKER_CLI} run --rm -v "${PWD}:/go/src/k8s.io/kube-state-metrics" -w /go/src/k8s.io/kube-state-metrics golang:${GO_VERSION} make build-local
 
-test-unit: clean build
+test-unit:
 	GOOS=$(shell uname -s | tr A-Z a-z) GOARCH=$(ARCH) $(TESTENVVAR) go test --race $(FLAGS) $(PKGS)
+
+test-rules:
+	${PROMTOOL_CLI} test rules tests/rules/alerts-test.yaml
 
 shellcheck:
 	${DOCKER_CLI} run -v "${PWD}:/mnt" koalaman/shellcheck:stable $(shell find . -type f -name "*.sh" -not -path "*vendor*")
@@ -99,17 +106,8 @@ do-push-%:
 
 push-multi-arch:
 	${DOCKER_CLI} manifest create --amend $(IMAGE):$(TAG) $(shell echo $(ALL_ARCH) | sed -e "s~[^ ]*~$(IMAGE)\-&:$(TAG)~g")
-	@for arch in $(ALL_ARCH); do ${DOCKER_CLI} manifest annotate --arch $${arch} $(IMAGE):$(TAG) $(IMAGE)-$${arch}:${TAG}; done
+	@for arch in $(ALL_ARCH); do ${DOCKER_CLI} manifest annotate --arch $${arch} $(IMAGE):$(TAG) $(IMAGE)-$${arch}:$(TAG); done
 	${DOCKER_CLI} manifest push --purge $(IMAGE):$(TAG)
-
-quay-push: .quay-push-$(ARCH)
-.quay-push-$(ARCH): container-$(ARCH)
-	${DOCKER_CLI} push $(MULTI_ARCH_IMG):$(TAG)
-	${DOCKER_CLI} push $(MULTI_ARCH_IMG):latest
-ifeq ($(ARCH), amd64)
-	${DOCKER_CLI} push $(IMAGE):$(TAG)
-	${DOCKER_CLI} push $(IMAGE):latest
-endif
 
 clean:
 	rm -f kube-state-metrics
@@ -151,4 +149,8 @@ install-tools:
 	@echo Installing tools from tools.go
 	@cat tools/tools.go | grep _ | awk -F'"' '{print $$2}' | xargs -tI % go install %
 
-.PHONY: all build build-local all-push all-container container container-* do-push-* sub-push-* push push-multi-arch quay-push test-unit test-benchmark-compare clean e2e validate-modules shellcheck licensecheck lint generate embedmd
+install-promtool:
+	@echo Installing promtool
+	@wget -qO- "https://github.com/prometheus/prometheus/releases/download/v${PROMETHEUS_VERSION}/prometheus-${PROMETHEUS_VERSION}.${OS}-${ARCH}.tar.gz" | tar xvz --strip-components=1
+
+.PHONY: all build build-local all-push all-container container container-* do-push-* sub-push-* push push-multi-arch test-unit test-rules test-benchmark-compare clean e2e validate-modules shellcheck licensecheck lint generate embedmd

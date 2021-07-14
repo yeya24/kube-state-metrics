@@ -26,16 +26,18 @@ import (
 	clientset "k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/cache"
 
-	"k8s.io/kube-state-metrics/pkg/metric"
-	generator "k8s.io/kube-state-metrics/pkg/metric_generator"
+	"k8s.io/kube-state-metrics/v2/pkg/metric"
+	generator "k8s.io/kube-state-metrics/v2/pkg/metric_generator"
 )
 
 var (
 	descEndpointLabelsName          = "kube_endpoint_labels"
 	descEndpointLabelsHelp          = "Kubernetes labels converted to Prometheus labels."
 	descEndpointLabelsDefaultLabels = []string{"namespace", "endpoint"}
+)
 
-	endpointMetricFamilies = []generator.FamilyGenerator{
+func endpointMetricFamilies(allowLabelsList []string) []generator.FamilyGenerator {
+	return []generator.FamilyGenerator{
 		*generator.NewFamilyGenerator(
 			"kube_endpoint_info",
 			"Information about endpoint.",
@@ -77,7 +79,7 @@ var (
 			metric.Gauge,
 			"",
 			wrapEndpointFunc(func(e *v1.Endpoints) *metric.Family {
-				labelKeys, labelValues := kubeLabelsToPrometheusLabels(e.Labels)
+				labelKeys, labelValues := createLabelKeysValues(e.Labels, allowLabelsList)
 				return &metric.Family{
 					Metrics: []*metric.Metric{
 						{
@@ -129,7 +131,7 @@ var (
 			}),
 		),
 	}
-)
+}
 
 func wrapEndpointFunc(f func(*v1.Endpoints) *metric.Family) func(interface{}) *metric.Family {
 	return func(obj interface{}) *metric.Family {

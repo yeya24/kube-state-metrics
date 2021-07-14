@@ -19,18 +19,20 @@ package types
 import (
 	"context"
 
+	metricsstore "k8s.io/kube-state-metrics/v2/pkg/metrics_store"
+
 	"github.com/prometheus/client_golang/prometheus"
 	vpaclientset "k8s.io/autoscaler/vertical-pod-autoscaler/pkg/client/clientset/versioned"
 	clientset "k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/cache"
 
-	generator "k8s.io/kube-state-metrics/pkg/metric_generator"
-	"k8s.io/kube-state-metrics/pkg/options"
+	generator "k8s.io/kube-state-metrics/v2/pkg/metric_generator"
+	"k8s.io/kube-state-metrics/v2/pkg/options"
 )
 
 // BuilderInterface represent all methods that a Builder should implements
 type BuilderInterface interface {
-	WithMetrics(r *prometheus.Registry)
+	WithMetrics(r prometheus.Registerer)
 	WithEnabledResources(c []string) error
 	WithNamespaces(n options.NamespaceList)
 	WithSharding(shard int32, totalShards int)
@@ -38,16 +40,17 @@ type BuilderInterface interface {
 	WithKubeClient(c clientset.Interface)
 	WithVPAClient(c vpaclientset.Interface)
 	WithAllowDenyList(l AllowDenyLister)
-	WithGenerateStoreFunc(f BuildStoreFunc)
-	DefaultGenerateStoreFunc() BuildStoreFunc
-	Build() []cache.Store
+	WithAllowLabels(l map[string][]string)
+	WithGenerateStoresFunc(f BuildStoresFunc)
+	DefaultGenerateStoresFunc() BuildStoresFunc
+	Build() []metricsstore.MetricsWriter
 }
 
-// BuildStoreFunc function signature that is use to returns a cache.Store
-type BuildStoreFunc func(metricFamilies []generator.FamilyGenerator,
+// BuildStoresFunc function signature that is used to return a list of metricsstore.MetricsStore
+type BuildStoresFunc func(metricFamilies []generator.FamilyGenerator,
 	expectedType interface{},
 	listWatchFunc func(kubeClient clientset.Interface, ns string) cache.ListerWatcher,
-) cache.Store
+) []*metricsstore.MetricsStore
 
 // AllowDenyLister interface for AllowDeny lister that can allow or exclude metrics by there names
 type AllowDenyLister interface {

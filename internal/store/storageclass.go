@@ -16,8 +16,8 @@ package store
 import (
 	"context"
 
-	"k8s.io/kube-state-metrics/pkg/metric"
-	generator "k8s.io/kube-state-metrics/pkg/metric_generator"
+	"k8s.io/kube-state-metrics/v2/pkg/metric"
+	generator "k8s.io/kube-state-metrics/v2/pkg/metric_generator"
 
 	v1 "k8s.io/api/core/v1"
 	storagev1 "k8s.io/api/storage/v1"
@@ -34,8 +34,10 @@ var (
 	descStorageClassLabelsDefaultLabels = []string{"storageclass"}
 	defaultReclaimPolicy                = v1.PersistentVolumeReclaimDelete
 	defaultVolumeBindingMode            = storagev1.VolumeBindingImmediate
+)
 
-	storageClassMetricFamilies = []generator.FamilyGenerator{
+func storageClassMetricFamilies(allowLabelsList []string) []generator.FamilyGenerator {
+	return []generator.FamilyGenerator{
 		*generator.NewFamilyGenerator(
 			"kube_storageclass_info",
 			"Information about storageclass.",
@@ -83,7 +85,7 @@ var (
 			metric.Gauge,
 			"",
 			wrapStorageClassFunc(func(s *storagev1.StorageClass) *metric.Family {
-				labelKeys, labelValues := kubeLabelsToPrometheusLabels(s.Labels)
+				labelKeys, labelValues := createLabelKeysValues(s.Labels, allowLabelsList)
 				return &metric.Family{
 					Metrics: []*metric.Metric{
 						{
@@ -96,7 +98,7 @@ var (
 			}),
 		),
 	}
-)
+}
 
 func wrapStorageClassFunc(f func(*storagev1.StorageClass) *metric.Family) func(interface{}) *metric.Family {
 	return func(obj interface{}) *metric.Family {

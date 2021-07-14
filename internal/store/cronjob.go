@@ -29,23 +29,25 @@ import (
 	clientset "k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/cache"
 
-	"k8s.io/kube-state-metrics/pkg/metric"
-	generator "k8s.io/kube-state-metrics/pkg/metric_generator"
+	"k8s.io/kube-state-metrics/v2/pkg/metric"
+	generator "k8s.io/kube-state-metrics/v2/pkg/metric_generator"
 )
 
 var (
 	descCronJobLabelsName          = "kube_cronjob_labels"
 	descCronJobLabelsHelp          = "Kubernetes labels converted to Prometheus labels."
 	descCronJobLabelsDefaultLabels = []string{"namespace", "cronjob"}
+)
 
-	cronJobMetricFamilies = []generator.FamilyGenerator{
+func cronJobMetricFamilies(allowLabelsList []string) []generator.FamilyGenerator {
+	return []generator.FamilyGenerator{
 		*generator.NewFamilyGenerator(
 			descCronJobLabelsName,
 			descCronJobLabelsHelp,
 			metric.Gauge,
 			"",
 			wrapCronJobFunc(func(j *batchv1beta1.CronJob) *metric.Family {
-				labelKeys, labelValues := kubeLabelsToPrometheusLabels(j.Labels)
+				labelKeys, labelValues := createLabelKeysValues(j.Labels, allowLabelsList)
 				return &metric.Family{
 					Metrics: []*metric.Metric{
 						{
@@ -200,8 +202,19 @@ var (
 				}
 			}),
 		),
+		*generator.NewFamilyGenerator(
+			"kube_cronjob_metadata_resource_version",
+			"Resource version representing a specific version of the cronjob.",
+			metric.Gauge,
+			"",
+			wrapCronJobFunc(func(j *batchv1beta1.CronJob) *metric.Family {
+				return &metric.Family{
+					Metrics: resourceVersionMetric(j.ObjectMeta.ResourceVersion),
+				}
+			}),
+		),
 	}
-)
+}
 
 func wrapCronJobFunc(f func(*batchv1beta1.CronJob) *metric.Family) func(interface{}) *metric.Family {
 	return func(obj interface{}) *metric.Family {

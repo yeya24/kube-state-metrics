@@ -26,15 +26,16 @@ import (
 
 	"github.com/pkg/errors"
 
-	"k8s.io/kube-state-metrics/pkg/metric"
+	"k8s.io/kube-state-metrics/v2/pkg/metric"
 )
 
 type generateMetricsTestCase struct {
-	Obj         interface{}
-	MetricNames []string
-	Want        string
-	Headers     []string
-	Func        func(interface{}) []metric.FamilyInterface
+	Obj             interface{}
+	MetricNames     []string
+	AllowLabelsList []string
+	Want            string
+	Headers         []string
+	Func            func(interface{}) []metric.FamilyInterface
 }
 
 func (testCase *generateMetricsTestCase) run() error {

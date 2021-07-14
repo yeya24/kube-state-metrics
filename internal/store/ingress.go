@@ -18,12 +18,12 @@ package store
 
 import (
 	"context"
+	"strconv"
 
-	"k8s.io/kube-state-metrics/pkg/metric"
-	generator "k8s.io/kube-state-metrics/pkg/metric_generator"
+	"k8s.io/kube-state-metrics/v2/pkg/metric"
+	generator "k8s.io/kube-state-metrics/v2/pkg/metric_generator"
 
-	"k8s.io/api/extensions/v1beta1"
-
+	networkingv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/watch"
@@ -35,14 +35,16 @@ var (
 	descIngressLabelsName          = "kube_ingress_labels"
 	descIngressLabelsHelp          = "Kubernetes labels converted to Prometheus labels."
 	descIngressLabelsDefaultLabels = []string{"namespace", "ingress"}
+)
 
-	ingressMetricFamilies = []generator.FamilyGenerator{
+func ingressMetricFamilies(allowLabelsList []string) []generator.FamilyGenerator {
+	return []generator.FamilyGenerator{
 		*generator.NewFamilyGenerator(
 			"kube_ingress_info",
 			"Information about ingress.",
 			metric.Gauge,
 			"",
-			wrapIngressFunc(func(s *v1beta1.Ingress) *metric.Family {
+			wrapIngressFunc(func(s *networkingv1.Ingress) *metric.Family {
 				return &metric.Family{
 					Metrics: []*metric.Metric{
 						{
@@ -56,8 +58,8 @@ var (
 			descIngressLabelsHelp,
 			metric.Gauge,
 			"",
-			wrapIngressFunc(func(i *v1beta1.Ingress) *metric.Family {
-				labelKeys, labelValues := kubeLabelsToPrometheusLabels(i.Labels)
+			wrapIngressFunc(func(i *networkingv1.Ingress) *metric.Family {
+				labelKeys, labelValues := createLabelKeysValues(i.Labels, allowLabelsList)
 				return &metric.Family{
 					Metrics: []*metric.Metric{
 						{
@@ -74,7 +76,7 @@ var (
 			"Unix creation timestamp",
 			metric.Gauge,
 			"",
-			wrapIngressFunc(func(i *v1beta1.Ingress) *metric.Family {
+			wrapIngressFunc(func(i *networkingv1.Ingress) *metric.Family {
 				ms := []*metric.Metric{}
 
 				if !i.CreationTimestamp.IsZero() {
@@ -93,7 +95,7 @@ var (
 			"Resource version representing a specific version of ingress.",
 			metric.Gauge,
 			"",
-			wrapIngressFunc(func(i *v1beta1.Ingress) *metric.Family {
+			wrapIngressFunc(func(i *networkingv1.Ingress) *metric.Family {
 				return &metric.Family{
 					Metrics: resourceVersionMetric(i.ObjectMeta.ResourceVersion),
 				}
@@ -104,14 +106,14 @@ var (
 			"Ingress host, paths and backend service information.",
 			metric.Gauge,
 			"",
-			wrapIngressFunc(func(i *v1beta1.Ingress) *metric.Family {
+			wrapIngressFunc(func(i *networkingv1.Ingress) *metric.Family {
 				ms := []*metric.Metric{}
 				for _, rule := range i.Spec.Rules {
 					if rule.HTTP != nil {
 						for _, path := range rule.HTTP.Paths {
 							ms = append(ms, &metric.Metric{
 								LabelKeys:   []string{"host", "path", "service_name", "service_port"},
-								LabelValues: []string{rule.Host, path.Path, path.Backend.ServiceName, path.Backend.ServicePort.String()},
+								LabelValues: []string{rule.Host, path.Path, path.Backend.Service.Name, strconv.Itoa(int(path.Backend.Service.Port.Number))},
 								Value:       1,
 							})
 						}
@@ -127,7 +129,7 @@ var (
 			"Ingress TLS host and secret information.",
 			metric.Gauge,
 			"",
-			wrapIngressFunc(func(i *v1beta1.Ingress) *metric.Family {
+			wrapIngressFunc(func(i *networkingv1.Ingress) *metric.Family {
 				ms := []*metric.Metric{}
 				for _, tls := range i.Spec.TLS {
 					for _, host := range tls.Hosts {
@@ -144,11 +146,11 @@ var (
 			}),
 		),
 	}
-)
+}
 
-func wrapIngressFunc(f func(*v1beta1.Ingress) *metric.Family) func(interface{}) *metric.Family {
+func wrapIngressFunc(f func(*networkingv1.Ingress) *metric.Family) func(interface{}) *metric.Family {
 	return func(obj interface{}) *metric.Family {
-		ingress := obj.(*v1beta1.Ingress)
+		ingress := obj.(*networkingv1.Ingress)
 
 		metricFamily := f(ingress)
 
@@ -164,10 +166,10 @@ func wrapIngressFunc(f func(*v1beta1.Ingress) *metric.Family) func(interface{}) 
 func createIngressListWatch(kubeClient clientset.Interface, ns string) cache.ListerWatcher {
 	return &cache.ListWatch{
 		ListFunc: func(opts metav1.ListOptions) (runtime.Object, error) {
-			return kubeClient.ExtensionsV1beta1().Ingresses(ns).List(context.TODO(), opts)
+			return kubeClient.NetworkingV1().Ingresses(ns).List(context.TODO(), opts)
 		},
 		WatchFunc: func(opts metav1.ListOptions) (watch.Interface, error) {
-			return kubeClient.ExtensionsV1beta1().Ingresses(ns).Watch(context.TODO(), opts)
+			return kubeClient.NetworkingV1().Ingresses(ns).Watch(context.TODO(), opts)
 		},
 	}
 }

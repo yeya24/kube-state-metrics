@@ -23,11 +23,11 @@ import (
 	"strconv"
 	"strings"
 
+	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/validation"
 
-	v1 "k8s.io/api/core/v1"
-
-	"k8s.io/kube-state-metrics/pkg/metric"
+	"k8s.io/kube-state-metrics/v2/pkg/metric"
+	"k8s.io/kube-state-metrics/v2/pkg/options"
 )
 
 var (
@@ -99,8 +99,7 @@ func mapToPrometheusLabels(labels map[string]string, prefix string) ([]string, [
 
 	conflicts := make(map[string]*conflictDesc)
 	for _, k := range sortedKeys {
-		labelName := lintLabelName(sanitizeLabelName(k))
-		labelKey := prefix + "_" + labelName
+		labelKey := labelName(prefix, k)
 		if conflict, ok := conflicts[labelKey]; ok {
 			if conflict.count == 1 {
 				// this is the first conflict for the label,
@@ -121,6 +120,10 @@ func mapToPrometheusLabels(labels map[string]string, prefix string) ([]string, [
 		labelValues = append(labelValues, labels[k])
 	}
 	return labelKeys, labelValues
+}
+
+func labelName(prefix, labelName string) string {
+	return prefix + "_" + lintLabelName(sanitizeLabelName(labelName))
 }
 
 func sanitizeLabelName(s string) string {
@@ -167,4 +170,24 @@ func isNativeResource(name v1.ResourceName) bool {
 
 func isPrefixedNativeResource(name v1.ResourceName) bool {
 	return strings.Contains(string(name), v1.ResourceDefaultNamespacePrefix)
+}
+
+// createLabelKeysValues takes in passed kubernetes labels and allowed list in kubernetes label format
+// it returns only those allowed labels that exist in the list converting them to Prometheus labels.
+func createLabelKeysValues(allKubeLabels map[string]string, allowList []string) ([]string, []string) {
+	allowedKubeLabels := make(map[string]string)
+
+	if len(allowList) > 0 {
+		if allowList[0] == options.LabelWildcard {
+			return kubeLabelsToPrometheusLabels(allKubeLabels)
+		}
+
+		for _, l := range allowList {
+			v, found := allKubeLabels[l]
+			if found {
+				allowedKubeLabels[l] = v
+			}
+		}
+	}
+	return kubeLabelsToPrometheusLabels(allowedKubeLabels)
 }

@@ -1,6 +1,6 @@
 # Overview
 
-[![Build Status](https://github.com/kubernetes/kube-state-metrics/workflows/Build/badge.svg)](https://github.com/kubernetes/kube-state-metrics/actions)
+[![Build Status](https://github.com/kubernetes/kube-state-metrics/workflows/continuous-integration/badge.svg)](https://github.com/kubernetes/kube-state-metrics/actions)
 [![Go Report Card](https://goreportcard.com/badge/github.com/kubernetes/kube-state-metrics)](https://goreportcard.com/report/github.com/kubernetes/kube-state-metrics) [![GoDoc](https://godoc.org/github.com/kubernetes/kube-state-metrics?status.svg)](https://godoc.org/github.com/kubernetes/kube-state-metrics)
 
 kube-state-metrics is a simple service that listens to the Kubernetes API
@@ -35,9 +35,10 @@ are deleted they are no longer visible on the `/metrics` endpoint.
   - [Container Image](#container-image)
 - [Metrics Documentation](#metrics-documentation)
   - [Conflict resolution in label names](#conflict-resolution-in-label-names)
-  - [Enabling VerticalPodAustoscalers](#enabling-verticalpodaustoscalers)
+  - [Enabling VerticalPodAutoscalers](#enabling-verticalpodautoscalers)
 - [Kube-state-metrics self metrics](#kube-state-metrics-self-metrics)
 - [Resource recommendation](#resource-recommendation)
+- [Latency](#latency)
 - [A note on costing](#a-note-on-costing)
 - [kube-state-metrics vs. metrics-server](#kube-state-metrics-vs-metrics-server)
 - [Scaling kube-state-metrics](#scaling-kube-state-metrics)
@@ -49,14 +50,9 @@ are deleted they are no longer visible on the `/metrics` endpoint.
 - [Usage](#usage)
   - [Kubernetes Deployment](#kubernetes-deployment)
   - [Limited privileges environment](#limited-privileges-environment)
+  - [Helm Chart](#helm-chart)
   - [Development](#development)
   - [Developer Contributions](#developer-contributions)
-
-### Versioning
-
-> **WARNING**: Please be aware that `master` branch is targeting an upcoming version v2
-> of kube-state-metrics, which includes breaking changes. Documentation for the latest
-> released version (`1.9.5`) is available in the [release-1.9](https://github.com/kubernetes/kube-state-metrics/tree/release-1.9/docs) branch.
 
 #### Kubernetes Version
 
@@ -67,19 +63,23 @@ The compatibility matrix for client-go and Kubernetes cluster can be found
 All additional compatibility is only best effort, or happens to still/already be supported.
 
 #### Compatibility matrix
+
 At most, 5 kube-state-metrics and 5 [kubernetes releases](https://github.com/kubernetes/kubernetes/releases) will be recorded below.
 
-| kube-state-metrics | **Kubernetes 1.13** | **Kubernetes 1.14** |  **Kubernetes 1.15** |  **Kubernetes 1.16** |  **Kubernetes 1.17** |
-|--------------------|---------------------|---------------------|----------------------|----------------------|----------------------|
-| **v1.6.0**         |         ✓           |         -           |          -           |          -           |          -           |
-| **v1.7.2**         |         ✓           |         ✓           |          -           |          -           |          -           |
-| **v1.8.0**         |         ✓           |         ✓           |          ✓           |          -           |          -           |
-| **v1.9.7**         |         -           |         -           |          -           |          ✓           |          -           |
-| **master**         |         -           |         -           |          -           |          ✓           |          ✓           |
+| kube-state-metrics | **Kubernetes 1.17** |  **Kubernetes 1.18** |  **Kubernetes 1.19** |  **Kubernetes 1.20** |  **Kubernetes 1.21** |
+|--------------------|---------------------|----------------------|----------------------|----------------------|----------------------|
+| **v1.9.8**         |         -           |          -           |          -           |          -           |          -           |
+| **v2.0.0**         |         -/✓         |          -/✓         |          ✓           |          ✓           |          -/✓         |
+| **v2.1.0**         |         -/✓         |          -/✓         |          ✓           |          ✓           |          ✓           |
+| **master**         |         -/✓         |          -/✓         |          ✓           |          ✓           |          ✓           |
+
 - `✓` Fully supported version range.
 - `-` The Kubernetes cluster has features the client-go library can't use (additional API objects, deprecated APIs, etc).
 
+**Note:** The current kube-state-metrics `v2.0.0 +` releases work on Kubernetes v1.17 & v1.18 excluding Ingress or CertificateSigningRequest resource metrics. If you require those metrics on an older Kubernetes version, use kube-state-metrics `v1.9.8`.
+
 #### Resource group version compatibility
+
 Resources in Kubernetes can evolve, i.e., the group version for a resource may change from alpha to beta and finally GA
 in different Kubernetes versions. For now, kube-state-metrics will only use the oldest API available in the latest
 release.
@@ -87,28 +87,12 @@ release.
 #### Container Image
 
 The latest container image can be found at:
-* `quay.io/coreos/kube-state-metrics:v1.9.7`
-* `k8s.gcr.io/kube-state-metrics:v1.9.7`
+* `k8s.gcr.io/kube-state-metrics/kube-state-metrics:v2.1.0` (arch: `amd64`, `arm`, `arm64`, `ppc64le` and `s390x`)
 
 ### Metrics Documentation
 
-There are many more metrics we could report, but this first pass is focused on
-those that could be used for actionable alerts. Please contribute PR's for
-additional metrics!
-
-> WARNING: THESE METRIC/TAG NAMES ARE UNSTABLE AND MAY CHANGE IN A FUTURE RELEASE.
-> For now, the following metrics and resources
->
-> **metrics**
->	* `kube_pod_container_resource_requests_nvidia_gpu_devices`
->	* `kube_pod_container_resource_limits_nvidia_gpu_devices`
->	* `kube_node_status_capacity_nvidia_gpu_cards`
->	* `kube_node_status_allocatable_nvidia_gpu_cards`
->
->	are removed in kube-state-metrics v1.4.0.
->
-> Any resources and metrics based on alpha Kubernetes APIs are excluded from any stability guarantee,
-> which may be changed at any given release.
+Any resources and metrics based on alpha Kubernetes APIs are excluded from any stability guarantee,
+which may be changed at any given release.
 
 See the [`docs`](docs) directory for more information on the exposed metrics.
 
@@ -135,11 +119,12 @@ e.g. by standardizing Kubernetes labels using an
 [Admission Webhook](https://kubernetes.io/docs/reference/access-authn-authz/extensible-admission-controllers/)
 that ensures that there are no possible conflicts.
 
-#### Enabling VerticalPodAustoscalers
+#### Enabling VerticalPodAutoscalers
 
-Please note that the collector for `verticalpodautoscalers` are disabled dy default.
-This is because Vertical Pod Austocalers are managed as custom resources. If you want to enable this collector,
-please ensure that you have the `v1beta2` CRDs installed beforehand. They can be found [here](https://github.com/kubernetes/autoscaler/blob/master/vertical-pod-autoscaler/deploy/vpa-beta2-crd.yaml).
+Please note that the collector for `verticalpodautoscalers` is **disabled** by default; Vertical Pod Autoscaler metrics will not be collected until the collector is enabled. This is because Vertical Pod Autoscalers are managed as custom resources.
+
+If you want to enable this collector,
+the [instructions](./docs/verticalpodautoscaler-metrics.md#Configuration) are located in the [Vertical Pod Autoscaler Metrics](./docs/verticalpodautoscaler-metrics.md) documentation.
 
 ### Kube-state-metrics self metrics
 
@@ -156,28 +141,51 @@ kube_state_metrics_list_total{resource="*v1.Node",result="error"} 52
 kube_state_metrics_watch_total{resource="*v1beta1.Ingress",result="success"} 1
 ```
 
+kube-state-metrics also exposes some http request metrics, examples of those are:
+```
+http_request_duration_seconds_bucket{handler="metrics",method="get",le="2.5"} 30
+http_request_duration_seconds_bucket{handler="metrics",method="get",le="5"} 30
+http_request_duration_seconds_bucket{handler="metrics",method="get",le="10"} 30
+http_request_duration_seconds_bucket{handler="metrics",method="get",le="+Inf"} 30
+http_request_duration_seconds_sum{handler="metrics",method="get"} 0.021113919999999998
+http_request_duration_seconds_count{handler="metrics",method="get"} 30
+```
+
+kube-state-metrics also exposes build and configuration metrics:
+```
+kube_state_metrics_build_info{branch="master",goversion="go1.15.3",revision="6c9d775d",version="v2.0.0-beta"} 1
+kube_state_metrics_shard_ordinal{shard_ordinal="0"} 0
+kube_state_metrics_total_shards 1
+```
+
+`kube_state_metrics_build_info` is used to expose version and other build information. For more usage about the info pattern,
+please check the blog post [here](https://www.robustperception.io/exposing-the-software-version-to-prometheus).
+Sharding metrics expose `--shard` and `--total-shards` flags and can be used to validate
+run-time configuration, see [`/examples/prometheus-alerting-rules`](./examples/prometheus-alerting-rules).
+
 ### Scaling kube-state-metrics
 
 #### Resource recommendation
 
-> Note: These recommendations are based on scalability tests done over a year ago. They may differ significantly today.
-
 Resource usage for kube-state-metrics changes with the Kubernetes objects (Pods/Nodes/Deployments/Secrets etc.) size of the cluster.
 To some extent, the Kubernetes objects in a cluster are in direct proportion to the node number of the cluster.
 
-As a general rule, you should allocate
+As a general rule, you should allocate:
 
-* 200MiB memory
+* 250MiB memory
 * 0.1 cores
 
-For clusters of more than 100 nodes, allocate at least
+Note that if CPU limits are set too low, kube-state-metrics' internal queues will not be able to be worked off quickly enough, resulting in increased memory consumption as the queue length grows. If you experience problems resulting from high memory allocation or CPU throttling, try increasing the CPU limits.
 
-* 2MiB memory per node
-* 0.001 cores per node
+### Latency
 
-These numbers are based on [scalability tests](https://github.com/kubernetes/kube-state-metrics/issues/124#issuecomment-318394185) at 30 pods per node.
+In a 100 node cluster scaling test the latency numbers were as follows:
 
-Note that if CPU limits are set too low, kube-state-metrics' internal queues will not be able to be worked off quickly enough, resulting in increased memory consumption as the queue length grows. If you experience problems resulting from high memory allocation, try increasing the CPU limits.
+```
+"Perc50": 259615384 ns,
+"Perc90": 475000000 ns,
+"Perc99": 906666666 ns.
+```
 
 ### A note on costing
 
@@ -194,14 +202,14 @@ It is a cluster level component which periodically scrapes metrics from all
 Kubernetes nodes served by Kubelet through Summary API. The metrics are
 aggregated, stored in memory and served in [Metrics API
 format](https://git.k8s.io/metrics/pkg/apis/metrics/v1alpha1/types.go). The
-metric-server stores the latest values only and is not responsible for
+metrics-server stores the latest values only and is not responsible for
 forwarding metrics to third-party destinations.
 
 kube-state-metrics is focused on generating completely new metrics from
 Kubernetes' object state (e.g. metrics based on deployments, replica sets,
 etc.). It holds an entire snapshot of Kubernetes state in memory and
 continuously generates new metrics based off of it. And just like the
-metric-server it too is not responsibile for exporting its metrics anywhere.
+metrics-server it too is not responsible for exporting its metrics anywhere.
 
 Having kube-state-metrics as a separate project also enables access to these
 metrics from monitoring systems such as Prometheus.
@@ -245,6 +253,12 @@ make container
 
 Simply build and run kube-state-metrics inside a Kubernetes pod which has a
 service account token that has read-only access to the Kubernetes cluster.
+
+### For users of prometheus-operator/kube-prometheus stack
+
+The ([`kube-prometheus`](https://github.com/prometheus-operator/kube-prometheus/)) stack installs kube-state-metrics as one of its [components](https://github.com/prometheus-operator/kube-prometheus#kube-prometheus); you do not need to install kube-state-metrics if you're using the kube-prometheus stack.
+
+If you want to revise the default configuration for kube-prometheus, for example to enable non-default metrics, have a look at [Customizing Kube-Prometheus](https://github.com/prometheus-operator/kube-prometheus#customizing-kube-prometheus).
 
 #### Kubernetes Deployment
 
@@ -293,7 +307,7 @@ subjects:
     namespace: your-namespace-where-kube-state-metrics-will-deployed
 ```
 
-- then specify a set of namespaces (using the `--namespace` option) and a set of kubernetes objects (using the `--resources`) that your serviceaccount has access to in the `kube-state-metrics` deployment configuration
+- then specify a set of namespaces (using the `--namespaces` option) and a set of kubernetes objects (using the `--resources`) that your serviceaccount has access to in the `kube-state-metrics` deployment configuration
 
 ```yaml
 spec:
@@ -303,10 +317,15 @@ spec:
       - name: kube-state-metrics
         args:
           - '--resources=pods'
-          - '--namespace=project1'
+          - '--namespaces=project1'
 ```
 
 For the full list of arguments available, see the documentation in [docs/cli-arguments.md](./docs/cli-arguments.md)
+
+
+#### Helm Chart
+
+Starting from the kube-state-metrics chart `v2.13.3` (kube-state-metrics image `v1.9.8`), the official [Helm chart](https://artifacthub.io/packages/helm/prometheus-community/kube-state-metrics/) is maintained in [prometheus-community/helm-charts](https://github.com/prometheus-community/helm-charts/tree/main/charts/kube-state-metrics). Starting from kube-state-metrics chart `v3.0.0` only kube-state-metrics images of `v2.0.0 +` are supported.
 
 #### Development
 

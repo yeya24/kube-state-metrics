@@ -19,8 +19,8 @@ package store
 import (
 	"context"
 
-	"k8s.io/kube-state-metrics/pkg/metric"
-	generator "k8s.io/kube-state-metrics/pkg/metric_generator"
+	"k8s.io/kube-state-metrics/v2/pkg/metric"
+	generator "k8s.io/kube-state-metrics/v2/pkg/metric_generator"
 
 	v1 "k8s.io/api/apps/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -35,8 +35,10 @@ var (
 	descDeploymentLabelsName          = "kube_deployment_labels"
 	descDeploymentLabelsHelp          = "Kubernetes labels converted to Prometheus labels."
 	descDeploymentLabelsDefaultLabels = []string{"namespace", "deployment"}
+)
 
-	deploymentMetricFamilies = []generator.FamilyGenerator{
+func deploymentMetricFamilies(allowLabelsList []string) []generator.FamilyGenerator {
+	return []generator.FamilyGenerator{
 		*generator.NewFamilyGenerator(
 			"kube_deployment_created",
 			"Unix creation timestamp",
@@ -255,7 +257,7 @@ var (
 			metric.Gauge,
 			"",
 			wrapDeploymentFunc(func(d *v1.Deployment) *metric.Family {
-				labelKeys, labelValues := kubeLabelsToPrometheusLabels(d.Labels)
+				labelKeys, labelValues := createLabelKeysValues(d.Labels, allowLabelsList)
 				return &metric.Family{
 					Metrics: []*metric.Metric{
 						{
@@ -268,7 +270,7 @@ var (
 			}),
 		),
 	}
-)
+}
 
 func wrapDeploymentFunc(f func(*v1.Deployment) *metric.Family) func(interface{}) *metric.Family {
 	return func(obj interface{}) *metric.Family {

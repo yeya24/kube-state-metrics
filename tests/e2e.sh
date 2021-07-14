@@ -23,12 +23,14 @@ case $(uname -m) in
 	*)		ARCH="$(uname -m)";;
 esac
 
-KUBERNETES_VERSION=v1.18.6
+NODE_IMAGE_NAME="docker.io/kindest/node"
+KUBERNETES_VERSION=${KUBERNETES_VERSION:-"v1.21.1"}
 KUBE_STATE_METRICS_LOG_DIR=./log
-KUBE_STATE_METRICS_IMAGE_NAME="quay.io/coreos/kube-state-metrics-${ARCH}"
+KUBE_STATE_METRICS_CURRENT_IMAGE_NAME="k8s.gcr.io/kube-state-metrics/kube-state-metrics"
+KUBE_STATE_METRICS_IMAGE_NAME="k8s.gcr.io/kube-state-metrics/kube-state-metrics-${ARCH}"
 E2E_SETUP_KIND=${E2E_SETUP_KIND:-}
 E2E_SETUP_KUBECTL=${E2E_SETUP_KUBECTL:-}
-KIND_VERSION=v0.8.1
+KIND_VERSION=v0.11.0
 SUDO=${SUDO:-}
 
 OS=$(uname -s | awk '{print tolower($0)}')
@@ -67,7 +69,7 @@ touch "${HOME}"/.kube/config
 
 export KUBECONFIG=$HOME/.kube/config
 
-kind create cluster --image=kindest/node:${KUBERNETES_VERSION}
+kind create cluster --image="${NODE_IMAGE_NAME}:${KUBERNETES_VERSION}"
 
 kind export kubeconfig
 
@@ -97,7 +99,7 @@ set -e
 kubectl version
 
 # query kube-state-metrics image tag
-make container
+REGISTRY="k8s.gcr.io/kube-state-metrics" make container
 docker images -a
 KUBE_STATE_METRICS_IMAGE_TAG=$(docker images -a|grep "${KUBE_STATE_METRICS_IMAGE_NAME}" |grep -v 'latest'|awk '{print $2}'|sort -u)
 echo "local kube-state-metrics image tag: $KUBE_STATE_METRICS_IMAGE_TAG"
@@ -105,7 +107,7 @@ echo "local kube-state-metrics image tag: $KUBE_STATE_METRICS_IMAGE_TAG"
 kind load docker-image "${KUBE_STATE_METRICS_IMAGE_NAME}:${KUBE_STATE_METRICS_IMAGE_TAG}"
 
 # update kube-state-metrics image tag in deployment.yaml
-sed -i.bak "s|${KUBE_STATE_METRICS_IMAGE_NAME%-*}:v.*|${KUBE_STATE_METRICS_IMAGE_NAME}:${KUBE_STATE_METRICS_IMAGE_TAG}|g" ./examples/standard/deployment.yaml
+sed -i.bak "s|${KUBE_STATE_METRICS_CURRENT_IMAGE_NAME}:v.*|${KUBE_STATE_METRICS_IMAGE_NAME}:${KUBE_STATE_METRICS_IMAGE_TAG}|g" ./examples/standard/deployment.yaml
 cat ./examples/standard/deployment.yaml
 
 trap finish EXIT

@@ -28,24 +28,26 @@ import (
 	clientset "k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/cache"
 
-	"k8s.io/kube-state-metrics/pkg/constant"
-	"k8s.io/kube-state-metrics/pkg/metric"
-	generator "k8s.io/kube-state-metrics/pkg/metric_generator"
+	"k8s.io/kube-state-metrics/v2/pkg/constant"
+	"k8s.io/kube-state-metrics/v2/pkg/metric"
+	generator "k8s.io/kube-state-metrics/v2/pkg/metric_generator"
 )
 
 var (
 	descVerticalPodAutoscalerLabelsName          = "kube_verticalpodautoscaler_labels"
 	descVerticalPodAutoscalerLabelsHelp          = "Kubernetes labels converted to Prometheus labels."
 	descVerticalPodAutoscalerLabelsDefaultLabels = []string{"namespace", "verticalpodautoscaler", "target_api_version", "target_kind", "target_name"}
+)
 
-	vpaMetricFamilies = []generator.FamilyGenerator{
+func vpaMetricFamilies(allowLabelsList []string) []generator.FamilyGenerator {
+	return []generator.FamilyGenerator{
 		*generator.NewFamilyGenerator(
 			descVerticalPodAutoscalerLabelsName,
 			descVerticalPodAutoscalerLabelsHelp,
 			metric.Gauge,
 			"",
 			wrapVPAFunc(func(a *autoscaling.VerticalPodAutoscaler) *metric.Family {
-				labelKeys, labelValues := kubeLabelsToPrometheusLabels(a.Labels)
+				labelKeys, labelValues := createLabelKeysValues(a.Labels, allowLabelsList)
 				return &metric.Family{
 					Metrics: []*metric.Metric{
 						{
@@ -221,7 +223,7 @@ var (
 			}),
 		),
 	}
-)
+}
 
 func vpaResourcesToMetrics(containerName string, resources v1.ResourceList) []*metric.Metric {
 	ms := []*metric.Metric{}

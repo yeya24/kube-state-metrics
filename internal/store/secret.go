@@ -26,16 +26,18 @@ import (
 	clientset "k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/cache"
 
-	"k8s.io/kube-state-metrics/pkg/metric"
-	generator "k8s.io/kube-state-metrics/pkg/metric_generator"
+	"k8s.io/kube-state-metrics/v2/pkg/metric"
+	generator "k8s.io/kube-state-metrics/v2/pkg/metric_generator"
 )
 
 var (
 	descSecretLabelsName          = "kube_secret_labels"
 	descSecretLabelsHelp          = "Kubernetes labels converted to Prometheus labels."
 	descSecretLabelsDefaultLabels = []string{"namespace", "secret"}
+)
 
-	secretMetricFamilies = []generator.FamilyGenerator{
+func secretMetricFamilies(allowLabelsList []string) []generator.FamilyGenerator {
+	return []generator.FamilyGenerator{
 		*generator.NewFamilyGenerator(
 			"kube_secret_info",
 			"Information about secret.",
@@ -74,7 +76,7 @@ var (
 			metric.Gauge,
 			"",
 			wrapSecretFunc(func(s *v1.Secret) *metric.Family {
-				labelKeys, labelValues := kubeLabelsToPrometheusLabels(s.Labels)
+				labelKeys, labelValues := createLabelKeysValues(s.Labels, allowLabelsList)
 				return &metric.Family{
 					Metrics: []*metric.Metric{
 						{
@@ -118,7 +120,8 @@ var (
 			}),
 		),
 	}
-)
+
+}
 
 func wrapSecretFunc(f func(*v1.Secret) *metric.Family) func(interface{}) *metric.Family {
 	return func(obj interface{}) *metric.Family {

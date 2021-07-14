@@ -1,4 +1,4 @@
-name: Kube-state-metrics CI checks
+name: continuous-integration
 
 on:
   push:
@@ -19,14 +19,14 @@ env:
   SUDO: sudo
 
 jobs:
-  job1:
-    name: Run Go Lint
+  ci-go-lint:
+    name: ci-go-lint
     runs-on: ubuntu-latest
     steps:
     - name: Set up Go 1.x
       uses: actions/setup-go@v2
       with:
-        go-version: ^1.14
+        go-version: ^1.16
       id: go
 
     - name: Check out code into the Go module directory
@@ -39,17 +39,17 @@ jobs:
 
     - name: Lint
       run: |
-        curl -sfL https://install.goreleaser.com/github.com/golangci/golangci-lint.sh | sh -s -- -b $(go env GOPATH)/bin v1.30.0
+        curl -sfL https://install.goreleaser.com/github.com/golangci/golangci-lint.sh | sh -s -- -b $(go env GOPATH)/bin v1.40.0
         make lint
 
-  job2:
-    name: Validate Manifests
+  ci-validate-manifests:
+    name: ci-validate-manifests
     runs-on: ubuntu-latest
     steps:
     - name: Set up Go 1.x
       uses: actions/setup-go@v2
       with:
-        go-version: ^1.14
+        go-version: ^1.16
       id: go
 
     - name: Check out code into the Go module directory
@@ -64,14 +64,14 @@ jobs:
       run: |
         make validate-manifests
 
-  job3:
-    name: Validate Go Modules
+  ci-validate-go-modules:
+    name: ci-validate-go-modules
     runs-on: ubuntu-latest
     steps:
     - name: Set up Go 1.x
       uses: actions/setup-go@v2
       with:
-        go-version: ^1.14
+        go-version: ^1.16
       id: go
 
     - name: Check out code into the Go module directory
@@ -82,18 +82,18 @@ jobs:
         go get -v -t -d ./...
         make install-tools
 
-    - name: Validate vendor is in sync with go modules
+    - name: Validate go modules
       run: |
         make validate-modules
 
-  job4:
-    name: Validate Documentation
+  ci-validate-docs:
+    name: ci-validate-docs
     runs-on: ubuntu-latest
     steps:
     - name: Set up Go 1.x
       uses: actions/setup-go@v2
       with:
-        go-version: ^1.14
+        go-version: ^1.16
       id: go
 
     - name: Check out code into the Go module directory
@@ -108,14 +108,14 @@ jobs:
       run: |
         make doccheck
 
-  job5:
-    name: Run Unit Tests
+  ci-unit-tests:
+    name: ci-unit-tests
     runs-on: ubuntu-latest
     steps:
     - name: Set up Go 1.x
       uses: actions/setup-go@v2
       with:
-        go-version: ^1.14
+        go-version: ^1.16
       id: go
 
     - name: Check out code into the Go module directory
@@ -130,14 +130,29 @@ jobs:
       run: |
         make test-unit
 
-  job6:
-    name: Run Benchmark Tests
+  ci-rule-tests:
+    name: ci-rule-tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out code into the Go module directory
+        uses: actions/checkout@v2
+
+      - name: Setup promtool
+        run: |
+          make install-promtool
+
+      - name: Rule tests
+        run: |
+          PROMTOOL_CLI=./promtool make test-rules
+
+  ci-benchmark-tests:
+    name: ci-benchmark-tests
     runs-on: ubuntu-latest
     steps:
     - name: Set up Go 1.x
       uses: actions/setup-go@v2
       with:
-        go-version: ^1.14
+        go-version: ^1.16
       id: go
 
     - name: Check out code into the Go module directory
@@ -152,14 +167,14 @@ jobs:
       run: |
         make test-benchmark-compare
 
-  job7:
-    name: Build Kube-State-Metrics
+  ci-build-kube-state-metrics:
+    name: ci-build-kube-state-metrics
     runs-on: ubuntu-latest
     steps:
     - name: Set up Go 1.x
       uses: actions/setup-go@v2
       with:
-        go-version: ^1.14
+        go-version: ^1.16
       id: go
 
     - name: Check out code into the Go module directory
@@ -174,14 +189,14 @@ jobs:
       run: |
         make build
 
-  job8:
-    name: Run E2E tests
+  ci-e2e-tests:
+    name: ci-e2e-tests
     runs-on: ubuntu-latest
     steps:
     - name: Set up Go 1.x
       uses: actions/setup-go@v2
       with:
-        go-version: ^1.14
+        go-version: ^1.16
       id: go
 
     - name: Check out code into the Go module directory
@@ -194,4 +209,4 @@ jobs:
 
     - name: End-to-end tests
       run: |
-        REGISTRY="quay.io/coreos" make e2e
+        make e2e

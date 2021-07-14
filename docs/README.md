@@ -7,7 +7,6 @@ Any contribution to improving this documentation or adding sample usages will be
 ## Table of Contents
 
 - [Metrics Stages](#metrics-stages)
-- [Metrics Deprecation](#metrics-deprecation)
 - [Exposed Metrics](#exposed-metrics)
 - [Join Metrics](#join-metrics)
 - [CLI arguments](#cli-arguments)
@@ -26,7 +25,7 @@ Stages about metrics are grouped into three categories：
 
 Per group of metrics there is one file for each metrics. See each file for specific documentation about the exposed metrics:
 
-- [CertificateSigningRequest Metrics](certificatessigningrequest-metrics.md)
+- [CertificateSigningRequest Metrics](certificatesigningrequest-metrics.md)
 - [ConfigMap Metrics](configmap-metrics.md)
 - [CronJob Metrics](cronjob-metrics.md)
 - [DaemonSet Metrics](daemonset-metrics.md)

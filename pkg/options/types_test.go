@@ -116,3 +116,99 @@ func TestMetricSetSet(t *testing.T) {
 		}
 	}
 }
+
+func TestLabelsAllowListSet(t *testing.T) {
+	tests := []struct {
+		Desc   string
+		Value  string
+		Wanted LabelsAllowList
+		err    bool
+	}{
+		{
+			Desc:   "empty labels list",
+			Value:  "",
+			Wanted: LabelsAllowList{},
+		},
+		{
+			Desc:   "[invalid] space delimited",
+			Value:  "cronjobs=[somelabel,label2] cronjobs=[label3,label4]",
+			Wanted: LabelsAllowList(map[string][]string{}),
+			err:    true,
+		},
+		{
+			Desc:   "[invalid] normal missing bracket",
+			Value:  "cronjobs=[somelabel,label2],cronjobs=label3,label4]",
+			Wanted: LabelsAllowList(map[string][]string{}),
+			err:    true,
+		},
+
+		{
+			Desc:   "[invalid] no comma between metrics",
+			Value:  "cronjobs=[somelabel,label2]cronjobs=[label3,label4]",
+			Wanted: LabelsAllowList(map[string][]string{}),
+			err:    true,
+		},
+		{
+			Desc:   "[invalid] no '=' between name and label list",
+			Value:  "cronjobs[somelabel,label2]cronjobs=[label3,label4]",
+			Wanted: LabelsAllowList(map[string][]string{}),
+			err:    true,
+		},
+		{
+			Desc:  "one resource",
+			Value: "cronjobs=[somelabel.io,label2/blah]",
+			Wanted: LabelsAllowList(map[string][]string{
+				"cronjobs": {
+					"somelabel.io",
+					"label2/blah",
+				}}),
+		},
+		{
+			Desc:  "two resources",
+			Value: "pods=[podsone,pods-two],nodes=[nodesone,nodestwo],namespaces=[nsone,nstwo]",
+			Wanted: LabelsAllowList(map[string][]string{
+				"pods": {
+					"podsone",
+					"pods-two"},
+				"nodes": {
+					"nodesone",
+					"nodestwo"},
+				"namespaces": {
+					"nsone",
+					"nstwo"}}),
+		},
+		{
+			Desc:  "with empty allow labels",
+			Value: "cronjobs=[somelabel,label2],pods=[]",
+			Wanted: LabelsAllowList(map[string][]string{
+				"cronjobs": {
+					"somelabel",
+					"label2",
+				},
+				"pods": {}}),
+		},
+		{
+			Desc:  "with wildcard",
+			Value: "cronjobs=[*],pods=[*,foo],namespaces=[bar,*]",
+			Wanted: LabelsAllowList(map[string][]string{
+				"cronjobs": {
+					"*",
+				},
+				"pods": {
+					"*",
+					"foo",
+				},
+				"namespaces": {
+					"bar",
+					"*"}}),
+		},
+	}
+
+	for _, test := range tests {
+		lal := &LabelsAllowList{}
+		gotError := lal.Set(test.Value)
+		if gotError != nil && !test.err || !reflect.DeepEqual(*lal, test.Wanted) {
+			t.Errorf("Test error for Desc: %s\n Want: \n%+v\n Got: \n%#+v\n Got Error: %#v", test.Desc, test.Wanted, *lal, gotError)
+		}
+	}
+}

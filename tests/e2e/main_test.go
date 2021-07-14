@@ -21,7 +21,6 @@ import (
 	"bytes"
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"os"
 	"path"
@@ -30,10 +29,10 @@ import (
 	"testing"
 
 	"github.com/pkg/errors"
+	"github.com/prometheus/client_golang/prometheus/testutil/promlint"
 	dto "github.com/prometheus/client_model/go"
-	"github.com/prometheus/prometheus/util/promlint"
 
-	ksmFramework "k8s.io/kube-state-metrics/tests/e2e/framework"
+	ksmFramework "k8s.io/kube-state-metrics/v2/tests/e2e/framework"
 )
 
 var framework *ksmFramework.Framework
@@ -146,7 +145,7 @@ func getLabelsDocumentation() (map[string][]string, error) {
 	documentedMetrics := map[string][]string{}
 
 	docPath := "../../docs/"
-	docFiles, err := ioutil.ReadDir(docPath)
+	docFiles, err := os.ReadDir(docPath)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to read documentation directory")
 	}
